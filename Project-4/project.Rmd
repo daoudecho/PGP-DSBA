@@ -1,0 +1,363 @@
+---
+title: "project"
+output:
+  pdf_document: default
+  html_document: default
+---
+# loading libraries
+```{r}
+library(readr)
+library(DataExplorer)
+library(caret)
+library(xgboost)
+library(ISLR)
+library(caTools)
+library(summarytools)
+library(DMwR)
+library(rattle)
+```
+# load dataset:
+```{r}
+Cars_data <- read_csv("C:/Users/daoud/Downloads/PGP DSBA/prodictive modeling/week 5 project/Cars-dataset.csv")
+#View(Cars_data)
+```
+
+## Exploratory Data Analysis
+
+```{r}
+summarytools::view(dfSummary(Cars_data))
+```
+Observation :
+1- we have 418 employeer with 9 varible ,Gender and Transport are character , the other varible are numeric .
+2- we have only one missing value : MBA .
+3- column name "Work Exp" will change to "Work_Exp" . 
+4- 19.9%	of employee use "2Wheeler", 8.4% use "Car", 71.8% use "Public Transport".
+5- dependent varible is "Transport" , independent varible are :"Age","Gender","Engineer","MBA","Work Exp","Salary","Distance","license"
+## challenging problem :
+we have 3 classes on a target variable , it should be 2 only.
+the task was to predict whether or not an employee will use Car as a mode of transport.
+there are two methods to solve the problem : "levels" or "ifelse",
+for today we will use "ifelse" to assign 1 for "Car" and 0 for others " Public_Transport , 2Wheeler " as Transport_car .
+ 
+```{r}
+summary(Cars_data)
+str(Cars_data)
+Cars_data <-na.omit(Cars_data) # drop missing value
+names(Cars_data)[names(Cars_data)=="Work Exp"]<-"Work_Exp" # change name without space .
+Cars_data$Transport_car <- ifelse(Cars_data$Transport=="Car",1,0) # convert 'Car' to 1 else to 0
+Cars_data$Gender <- ifelse(Cars_data$Gender == "Male",1,0) # convert 'Male' to 1 else to 0
+prop.table(table(Cars_data$Transport)) 
+Cars_data
+```
+Observation :
+1- ther is one missing value and we drop it.
+2- we have 19.9% use 2Wheeler and 8.39% use car and 71.7% use Public Transport.
+## normality distribution :
+# visualization:
+```{r}
+plot_bar(Cars_data)
+
+plot_histogram(Cars_data)
+```
+observation :
+1- most of employee use Public Transport.
+2- most of employee are Male.
+3- most of employee have Engineer Degree.
+4- most of employee have MBA Degree.
+5- most of employee don't have License.
+6- both Age and Distance are normally distributed.
+7- both Salary and Work_Exp are skewed right, possible outlier.
+# varibles relationship :
+```{r}
+ggplot(data = Cars_data, mapping = aes(x = Transport, y = Salary)) +
+  geom_boxplot()
+```
+observation :
+high Salary employees they use Car for Trasport.
+```{r}
+ggplot(data = Cars_data) + 
+  geom_point(mapping = aes(x = Salary, y = Work_Exp))
+```
+observation:
+1- there is linear relationship between Salary and Work_Exp , the higher Work_Exp the higher Salary .
+2- there are 
+```{r}
+par(mfrow=c(1,2))
+hist(Cars_data$Transport_car[Cars_data$Gender==1],col = "blue",xlab = "Gender_Male",main = "Histogram Transport",ylim = c(0,250))
+hist(Cars_data$Transport_car[Cars_data$Gender==0],col = "blue",xlab = "Gender_Female",main = "Histogram Transport",ylim = c(0,250))
+```
+observation:
+most of Male and Female employee don't use car , but Male employee use car for those how use Car as Transport.
+```{r}
+par(mfrow=c(1,2))
+boxplot(Cars_data$Work_Exp[Cars_data$Transport_car==1],col = "blue",xlab = "car Transport",main = "Histogram work_exp",ylim=c(0,25))
+boxplot(Cars_data$Work_Exp[Cars_data$Transport_car==0],col = "blue",xlab = "without car Transport",main = "Histogram work_exp",ylim=c(0,25))
+```
+observation:
+most of employees that have more then 15 years of Work Experience use Car for transport.
+
+```{r}
+plot(density(Cars_data$Work_Exp),main="salary")
+par(mfrow=c(1,2))
+boxplot(Cars_data$Salary[Cars_data$Transport_car==1],col = "blue",xlab = "car Transport",main = "Histogram Salary",ylim=c(0,60))
+boxplot(Cars_data$Salary[Cars_data$Transport_car==0],col = "blue",xlab = "without car Transport",main = "Histogram Salary",ylim=c(0,60))
+```
+observation:
+most of employees that have more then 30K of Salary use Car for transport.
+```{r}
+par(mfrow=c(1,2))
+hist(Cars_data$Transport_car[Cars_data$license==1],col = "blue",xlab = "with license",main = "Histogram Transport",ylim = c(0,350))
+hist(Cars_data$Transport_car[Cars_data$license==0],col = "blue",xlab = "without license",main = "Histogram Transport",ylim = c(0,350))
+sum(Cars_data$Transport_car==1 & Cars_data$license==0) # to find how many have Car without license 
+```
+observation:
+1- most of employees don't have license don't have Car.
+2- there are 6 employees have Car but don't have License, maybe they have personal driver.
+```{r}
+par(mfrow=c(1,2))
+boxplot(Cars_data$Distance[Cars_data$Transport_car==1],col = "blue",xlab = "with car",main = "Histogram Distance",ylim = c(0,30))
+boxplot(Cars_data$Distance[Cars_data$Transport_car==0],col = "blue",xlab = "without car",main = "Histogram Distance",ylim = c(0,30))
+```
+observation:
+1- most employees how live 15 KM or more from office have Car for Transport.
+2- all employees live less then 20 KM don't have Car.
+
+# correlation:
+```{r}
+# we drop Transport for now .
+Cars_data1<- Cars_data[,-c(9)]
+plot_correlation(Cars_data1)
+```
+observation:
+1- as we found from the graph hight correlation between Work_exp and Salary 0.93 .
+2- 0.86 correlation between Salary and Age.
+3- agian hight correlation between Salary and Transport_car 0.81.
+# split Dataset to Train and Test :
+```{r}
+set.seed(199)
+Cars_data1<- as.data.frame(Cars_data1)
+Cars_data1$Transport_car <- ifelse(Cars_data1$Transport==1,"Yes","No")
+
+sample = sample.split(Cars_data1,SplitRatio = 0.75) # 75% train data , 25% test data
+training = subset(Cars_data1,sample == TRUE)
+testing = subset(Cars_data1,sample == FALSE)
+nrow(training)
+nrow(testing)
+# the data split is equal between Train and Test with original dataset.
+prop.table(table(Cars_data1$Transport_car))
+prop.table(table(training$Transport_car))
+prop.table(table(testing$Transport_car))
+training$Transport_car<-as.factor(training$Transport_car) # to be Factor 
+testing$Transport_car<-as.factor(testing$Transport_car)   # to be Factor
+```
+## Modeling :
+
+# Setting up the general parameters for training multiple models:
+```{r}
+set.seed(213)
+Crul<- trainControl(
+  method = "repeatedcv",
+  number = 5,     # number of folds
+  repeats = 10,   # repeated k-fold cross-validation
+  p = 10,
+  allowParallel = TRUE,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary
+  )
+```
+# rpart: Single decision tree : 
+```{r}
+rpart_model <- train(Transport_car ~ ., data = training,
+                     method = "rpart",
+                     minbucket = 10,
+                     cp = 0,
+                     tuneLength = 10,
+                     trControl = Crul)
+
+rpart_model
+
+varimp<-varImp(rpart_model)
+print(varimp)
+fancyRpartPlot(rpart_model$finalModel)
+```
+obsevation:
+1- Variable Importance : salary is the most important variable
+2- Work_Exp, Age, Distance, license, by sort.
+3- 91% employee without Car with have Salary<38 and Distance<18 .   
+#Accuracy:
+```{r}
+rpart_pred_test <- predict(rpart_model, newdata =testing[,1:8], type = "raw")
+caret::confusionMatrix(rpart_pred_test, testing$Transport_car)
+```
+# KNN:
+```{r}
+knn<-train(
+  Transport_car~.,
+  data = training,
+  method="knn",
+  #preProcess = c("center", "scale"),
+  tuneLength = 3,
+  trControl = Crul)
+
+```
+#Accuracy:
+```{r}
+knn_pred_test <- predict(knn, newdata =testing[,1:8], type = "raw")
+caret::confusionMatrix(knn_pred_test, testing$Transport_car)
+```
+# model naive base:
+```{r}
+naive_base<-train(
+  Transport_car~.,
+  data = training,
+  method="naive_bayes",
+  trControl = Crul)
+
+```
+#Accuracy:
+```{r}
+naive_pred_test <- predict(naive_base, newdata =testing[,1:8], type = "raw")
+caret::confusionMatrix(naive_pred_test, testing$Transport_car)
+```
+
+# Logistic Regression :
+```{r}
+glm<-train(
+  Transport_car~.,
+  data = training,
+  method = "glm",
+  family = "binomial",
+  trControl = Crul
+)
+```
+#Accuracy:
+```{r}
+glm_pred_test <- predict(glm, newdata =testing[,1:8], type = "raw")
+caret::confusionMatrix(glm_pred_test, testing$Transport_car)
+```
+
+# Random Forest : 
+```{r}
+rf<-train(
+  Transport_car~.,
+  data = training,
+  method = "rf",
+  ntree = 50,
+  maxdepth = 7,
+  tuneLength = 20,
+  trControl = Crul)
+```
+#Accuracy:
+```{r}
+rf_pred_test <- predict(rf, newdata =testing[,1:8], type = "raw")
+caret::confusionMatrix(rf_pred_test, testing$Transport_car)
+```
+# bagging :
+```{r}
+bagging_model<-train(
+  Transport_car~.,
+  data = training,
+  method = "treebag",
+  nleaves=10,
+  ntrees=5,
+  trControl=Crul,
+  importance=TRUE
+)
+```
+#Accuracy:
+```{r}
+bagging_predictions_test <- predict(bagging_model, newdata = testing, type = "raw")
+caret::confusionMatrix(bagging_predictions_test, testing$Transport_car)
+```
+# xgboost: ( without SMOTE )
+```{r}
+xgb.grid <- expand.grid(nrounds = 150,
+                            eta = c(0.01),
+                            max_depth = c(4,7),
+                            gamma = 0,               #default=0
+                            colsample_bytree = 1,    #default=1
+                            min_child_weight = 1,    #default=1
+                            subsample = 1            #default=1
+    )
+xgb_model <-train(Transport_car~.,
+                  data=training,
+                  method="xgbTree",
+                  trControl=Crul,
+                  tuneGrid=xgb.grid,
+                  verbose=T,
+                  nthread = 2
+    )
+```
+#Accuracy:
+```{r}
+xgb_predictions_test <- predict(xgb_model, newdata = testing, type = "raw")
+confusionMatrix(xgb_predictions_test, testing$Transport_car)
+```
+# SMOTE:
+```{r}
+
+table(training$Transport_car)
+prop.table(table(training$Transport_car))
+
+smote_train <- SMOTE(Transport_car ~ ., data  = training,
+                     perc.over = 3000,
+                     perc.under = 300,
+                     k = 5)   
+
+prop.table(table(smote_train$Transport_car))
+table(smote_train$Transport_car)
+```
+# xgboost: ( with SMOTE )
+```{r}
+xgb.grid <- expand.grid(nrounds = 150,
+                            eta = c(0.01),
+                            max_depth = c(4,7),
+                            gamma = 0,               #default=0
+                            colsample_bytree = 1,    #default=1
+                            min_child_weight = 1,    #default=1
+                            subsample = 1            #default=1
+    )
+smote_model <-train(Transport_car~.,
+                  data=smote_train,
+                  method="xgbTree",
+                  trControl=Crul,
+                  tuneGrid=xgb.grid,
+                  verbose=T,
+                  nthread = 2
+    )
+```
+#Accuracy:
+```{r}
+smote_predictions_test <- predict(smote_model, newdata = testing, type = "raw")
+confusionMatrix(smote_predictions_test, testing$Transport_car)
+```
+
+## COMPARING MODELS
+```{r}
+# Compare model performances using resample()
+models_to_compare <- resamples(list(Logistic_Regression = glm, 
+                                 Navie_Bayes = naive_base, 
+                                 KNN = knn, 
+                                 bagging = bagging_model,
+                                 Single_tree = rpart_model,
+                                 smote=smote_model,
+                                 Random_Forest = rf, 
+                                 xgboost=xgb_model
+                                 ))
+
+# Summary of the models performances
+summary(models_to_compare)
+```
+
+## Draw box plots to compare models
+```{r}
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+bwplot(models_to_compare, scales=scales)
+```
+
+## Summary:
+1- we try to understand what transport employees prefers to commute to their office Car or other , so we upload and Data Preparation and split data in to two part Train,Test and we applied multiple "7" models with general parameters.<br />
+2- lets discuss the result : <br />
+biased on the best accuracy : "bagging, xgboost, random forest, naive baise" had same acuuracy value : 99.28% , after that "smote, Logistic Regression" had Accuracy of : 98.56%, befor last "knn" with accuracy of : 97.84% , and last "Single decision tree" with :96.4%. <br />
+3- but when sort baised on ROC and Sensitivity and Specificity : witch are very important for choosing the model, "smote" is the best of all, and then "bagging,naive baise" .<br />
+4- the last disussion : since smote is the best on ROC and Sensitivity and Specificity and had Accuracy of : 98.56% witch is Good. I will go with smote model.
