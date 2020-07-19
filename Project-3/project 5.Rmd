@@ -1,0 +1,446 @@
+---
+title: "project 5"
+output:
+  pdf_document: default
+  word_document: default
+---
+## loading DataSet for Thera Bank_Personal_Loan_Modelling :
+```{r}
+library(readxl)
+Thera_Bank <- read_excel("C:/Users/daoud/Downloads/PGP DSBA/ML/week 5/Thera Bank_Personal_Loan_Modelling-dataset-1.xlsx", 
+    sheet = "Bank_Personal_Loan_Modelling")
+
+```
+
+## packages :
+```{r}
+library(rpart)
+library(caTools)
+library(summarytools)
+library(caret)
+library(janitor)
+library(randomForest)
+library(InformationValue)
+library(ROCR)
+library(ineq)
+library(rattle)
+library(stats)
+library(rpart.plot)
+```
+
+## Exploratory Data Analysis:
+
+```{r}
+head(Thera_Bank)
+```
+
+
+## use clean_name to rename all variables :
+```{r}
+str(Thera_Bank)
+Thera_Bank<-clean_names(dat = Thera_Bank)
+```
+
+## data summary:
+```{r}
+#view(dfSummary(Thera_Bank)) # is very helpful for summary 
+summary(Thera_Bank)
+```
+
+# Observation :
+##1 we have 5000 customers data with 14 variables all numeric .
+##2 we have 18 missing values on Family members .
+##3 we have negative values on experience_in_years will have to drop .
+
+## we replace the missing value with median and drop negative experience_in_years values  :
+```{r}
+Thera_Bank$family_members[is.na(Thera_Bank$family_members)] <- median(Thera_Bank$family_members, na.rm=TRUE)
+sum(is.na(Thera_Bank$family_members))
+Thera_Bank<-Thera_Bank[Thera_Bank$experience_in_years>0,]  # drop negative values experience_in_years
+```
+
+
+## lets plot some variables:
+```{r}
+hist(Thera_Bank$income_in_k_month,col = "blue",xlab = "income_in_k_month",main = "histogram income_in_month")
+```
+# Observation :
+## The above distributionis is right skewed distribution.
+
+```{r}
+hist(Thera_Bank$age_in_years,col = "blue",xlab = "age_in_years",main = "histogram age_in_years")
+```
+# Observation :
+## The Age is normal distribution.
+```{r}
+hist(Thera_Bank$experience_in_years,col = "blue",xlab = "experience_in_years",main = "Histogram experience_in_years")
+```
+# Observation :
+## The Experience also is normal distribution.
+```{r}
+hist(Thera_Bank$zip_code,col = "blue",xlab = "zip_code",main = "Histogram zip_code")
+```
+# Observation :
+## zip code doesn't give any impact on personal loan.
+## we drop zip_code later .
+```{r}
+hist(Thera_Bank$cc_avg,col = "blue",xlab = "cc_avg",main = "Histogram cc_avg")
+```    
+# Observation :
+## The cc_avg is right skewed distribution because the tail goes to the right.
+## most of the customers spend on avg 1K to 2K per month on credit cards. 
+## few customers spend more then 8K .
+```{r}
+hist(Thera_Bank$mortgage,col = "blue",xlab = "mortgage",main = "Histogram mortgage")
+```    
+# Observation :
+## The mortgage is right skewed distribution.
+## most of the customers mortgage 50K to 150K.
+## very few of customers mortgage above 400K. 
+```{r}
+par(mfrow=c(1,2))
+hist(Thera_Bank$securities_account[Thera_Bank$personal_loan==1],col = "blue",xlab = "securities_account_with_loan",main = "Histogram securities_account",ylim = c(0,4000))
+hist(Thera_Bank$securities_account[Thera_Bank$personal_loan==0],col = "blue",xlab = "securities_account_without_loan",main = "Histogram securities_account",ylim = c(0,4000))
+``` 
+# Observation :
+## The majorty of customer don't have securities account.
+## the customers have securities account are more likly to loan. 
+```{r}
+par(mfrow=c(1,2))
+hist(Thera_Bank$cd_account[Thera_Bank$personal_loan==1],col = "blue",xlab = "cd_accountt_with_loan",main = "Histogram cd_account",ylim = c(0,4000))
+hist(Thera_Bank$cd_account[Thera_Bank$personal_loan==0],col = "blue",xlab = "cd_account_without_loan",main = "Histogram cd_accountt",ylim = c(0,4000))
+```
+# Observation :
+## The majorty of customer don't have cd account.
+## almost all customers have cd account has loan.
+```{r}
+par(mfrow=c(1,2))
+hist(Thera_Bank$online[Thera_Bank$personal_loan==1],col = "blue",xlab = "online_with_loan",main = "Histogram online",ylim = c(0,4000))
+hist(Thera_Bank$online[Thera_Bank$personal_loan==0],col = "blue",xlab = "online_without_loan",main = "Histogram online",ylim = c(0,4000))
+```
+# Observation :
+## The majorty of customer don't use online banking.
+## all customers use online banking has loan as well.
+```{r}
+par(mfrow=c(1,2))
+hist(Thera_Bank$credit_card[Thera_Bank$personal_loan==1],col = "blue",xlab = "credit_card_with_loan",main = "Histogram credit_card",ylim = c(0,4000))
+hist(Thera_Bank$credit_card[Thera_Bank$personal_loan==0],col = "blue",xlab = "credit_card_without_loan",main = "Histogram credit_card",ylim = c(0,4000))
+```
+# Observation :
+## The majorty of customer don't use credit card.
+## almost all customers using credit card has loan as well.
+```{r}
+par(mfrow=c(1,2))
+hist(Thera_Bank$family_members[Thera_Bank$personal_loan==1],col = "blue",xlab = "credit_card_with_loan",main = "Histogram credit_card",ylim = c(0,1500))
+hist(Thera_Bank$family_members[Thera_Bank$personal_loan==0],col = "blue",xlab = "credit_card_without_loan",main = "Histogram credit_card",ylim = c(0,1500))
+```
+# Observation :
+## family nembers don't have any impact on personal loan.
+    
+## drop the ID and zip_code colume:
+```{r}
+Thera_Bank = Thera_Bank[,-c(1,5)]
+Thera_Bank1<- Thera_Bank  # will use later for decision tree and Random forest 
+```
+
+# cluster:
+=============================
+
+## Apply Clustering algorithm:
+```{r}
+seed=1000
+set.seed(seed) 
+levels(Thera_Bank$personal_loan) <- c("0", "1")
+Thera_Bank$personal_loan<-as.numeric(Thera_Bank$personal_loan)
+cluster_sample<-Thera_Bank
+cluster_sample <- Thera_Bank[sample(nrow(Thera_Bank), 70), ] # we pick random sample to cluster using Kmeans
+cluster_sample.scaled <- scale(cluster_sample)               # Scale the dataset 
+```
+
+## NbClust for the best K between 2 and 9 using Kmeans method :
+```{r}
+library(NbClust)
+seed=1000
+set.seed(seed) 
+nc <- NbClust(cluster_sample[,c(-1)], min.nc=2, max.nc=9, method="kmeans")
+```
+## the best K is 4 .
+## nc now contains :
+```{r}
+table(nc$Best.n[1,])
+```
+## K=4 would be the best choice:
+```{r}
+set.seed(seed) 
+clust3 = kmeans(x=cluster_sample.scaled, centers = 4, nstart = 5)
+print(clust3)
+```
+## plot cluster :
+```{r}
+library(cluster)
+clusplot(cluster_sample.scaled, clust3$cluster, color=TRUE, shade=TRUE)
+```
+## adding cluster number colume to dataset :
+```{r}
+cluster_sample$Clusters = clust3$cluster
+print(cluster_sample)
+```
+## Aggregating:
+```{r}
+custProfile = aggregate(cluster_sample,list(cluster_sample$Clusters),FUN="mean")
+print(custProfile)
+```
+# Observation :
+## every colume mean based on 4 cluster group.
+
+
+# prepare data for Train Models :
+================================================
+
+## we ensure target varibal is factor :
+```{r}
+head(Thera_Bank1)
+summary(Thera_Bank1)
+Thera_Bank1$personal_loan<- factor(ifelse(Thera_Bank1$personal_loan, 'Yes', 'No'))
+
+```
+## spliting data Train and Test  :
+```{r}
+sample = sample.split(Thera_Bank1,SplitRatio = 0.7) # 70% train data , 30% test data
+d_train = subset(Thera_Bank1,sample == TRUE)
+d_test = subset(Thera_Bank1,sample == FALSE)
+nrow(d_train)
+nrow(d_test)
+prop.table(table(Thera_Bank1$personal_loan))
+prop.table(table(d_train$personal_loan))
+prop.table(table(d_test$personal_loan))
+```
+## Ensure similar class distribution for train and test.
+## setting general paramater for training :
+```{r}
+Ctrl <- trainControl(
+              method = 'repeatedcv',           # repeatedcv : repeated random sub-sampling validation
+              number = 5,                     # number of  k
+              repeats = 3,                     # repeated k-fold cross-validation
+              allowParallel = TRUE,
+              classProbs = TRUE,              # Estimate class probabilities
+              summaryFunction=twoClassSummary # should class probabilities be returned
+    ) 
+```
+
+## Train a single decision tree:
+-------------------------------
+```{r}
+set.seed(2000)
+rpart_model <- train(personal_loan~ ., data =d_train,
+                     method = "rpart",
+                     minbucket = 50,
+                     cp = 0.01,
+                     tuneLength = 20,
+                     trControl = Ctrl)
+
+rpart_model
+```
+## Plot the CP values and Tree:
+```{r}
+plot(rpart_model)
+print(rpart_model$finalModel)
+fancyRpartPlot(rpart_model$finalModel)
+prp(rpart_model$finalModel, box.palette = "auto",branch.type = 5, yesno = FALSE, faclen = 0)
+```
+# Observation :
+##  ROC reaches 1 when complexity parameter reaches 0 .
+##  75% didn't loan had incom<113.5 and cc_avg <2.95 .
+
+
+## Predict both class and probabilities:
+```{r}
+rpart_predict_test_prob <- predict(rpart_model, newdata = d_test, type = "prob")
+rpart_predict_test_class <- predict(rpart_model, newdata = d_test, type = "raw")
+
+```
+
+## The Confusion Matrix :
+```{r}
+caret::confusionMatrix(rpart_predict_test_class, d_test$personal_loan, positive = "Yes")
+```
+# Observation :
+## the Accuracy is 98.59% .
+## Sensitivity quite similar to Specificity.
+
+## Concordance - Discordance (overall : rarely used, specific to certain domains)
+```{r}
+levels(d_test$personal_loan) <- c("0", "1")
+Concordance(actuals = d_test$personal_loan, predictedScores = rpart_predict_test_prob[,2])
+```
+# Observation :
+## Concordance is 99.14% , Probality of (Right) is 99.14% which is very Good.
+## Discordance is 0.08%.
+
+#3 ROC & Precision Recall Curves
+```{r}
+# Creating the prediction object using ROCR library
+levels(d_test$personal_loan) <- c("No", "Yes")
+pred_obj_dtree = prediction(rpart_predict_test_prob[,2], d_test$personal_loan)
+
+
+# ROC curve
+ROC_curve = performance(pred_obj_dtree, "tpr", "fpr")
+plot(ROC_curve, main = "ROC curve")
+abline(a=0, b= 1, lty = 3)
+
+
+# Precision recall curve
+precision_recall_dtree <- performance(pred_obj_dtree, "ppv", "tpr")
+plot(precision_recall_dtree, main = "Precisoin Recall curve")
+abline(a=0, b= 1, lty = 3)
+
+# Computing the area under the curve
+auc = performance(pred_obj_dtree,"auc"); 
+auc = as.numeric(auc@y.values)
+auc
+
+# Computing Gini
+gini = ineq(rpart_predict_test_prob[,2], type="Gini")
+gini
+
+```
+# Observation :
+## area under the curve AUC : 99.48%
+## gini :87.08%
+## Gini score is merely a reformulation of the AUC: Gini= 2*AUC-1
+
+## Gain & Lift Chart
+```{r}
+lift_dtree <- lift(d_test$personal_loan ~ rpart_predict_test_prob[,2], data = d_test, class ="Yes")
+ggplot(lift_dtree, plot = "lift")+ ggtitle("Lift Chart")
+ggplot(lift_dtree, plot = "gain", valueitle("Gain Chart"))
+```
+## KS table & KS plot
+```{r}
+ks_stat(d_test$personal_loan, rpart_predict_test_prob[,2]) # print KS
+
+ks_stat(d_test$personal_loan, rpart_predict_test_prob[,2], returnKSTable = T) # print KS table
+
+ks_plot(d_test$personal_loan, rpart_predict_test_prob[,2]) # plot KS 
+
+```
+# Observation :
+## Ks : 94.15%.
+## by 20% you reache 99.30%.
+
+## train Random Forest :
+================================
+```{r}
+set.seed(2020)
+rf_model <- train(personal_loan ~ ., data = d_train,
+                     method = "rf",
+                     ntree = 301,   # number of tree
+                     maxdepth = 15,
+                     tuneLength = 15,
+                     trControl = Ctrl)
+rf_model
+```
+# Observation :
+## the best mtry value was 7.
+
+## Plot ROC and print the random forest:
+```{r}
+plot(rf_model)
+print(rf_model$finalModel)
+```
+# Observation :
+## strongly support mtry=7 from the plot.
+## OOB error estimate rate: 1.63% which is good.
+
+## Predict both class and probabilities
+```{r}
+rf_predict_test_prob <- predict(rf_model, newdata = d_test, type = "prob")
+rf_predict_test_class <- predict(rf_model, newdata = d_test, type = "raw")
+```
+## The Confusion Matrix (most common way of evaluating a model)
+```{r}
+caret::confusionMatrix(rf_predict_test_class, d_test$personal_loan, positive = "Yes")
+```
+# Observation :
+## Accuracy is 98.83% 
+## some difference between Sensitivity and Specificity.
+
+## Concordance - Discordance (overall : rarely used, specific to certain domains)
+```{r}
+levels(d_test$personal_loan) <- c("0", "1")
+Concordance(actuals = d_test$personal_loan, predictedScores = rf_predict_test_prob[,2])
+```
+# Observation :
+## Concordance is 99.87%, Probality of (Right) is 99.87% which is very Good.
+## Discordance is 0.01%.
+
+## ROC & Precision Recall Curves:
+```{r}
+# Creating the prediction object using ROCR library
+levels(d_test$personal_loan) <- c("No", "Yes")
+pred_obj_rf = prediction(rf_predict_test_prob[,2], d_test$personal_loan)
+
+
+# ROC curve
+ROC_curve = performance(pred_obj_rf, "tpr", "fpr")
+plot(ROC_curve, main = "ROC curve")
+abline(a=0, b= 1, lty = 3)
+
+
+# Precision recall curve
+precision_recall_rf <- performance(pred_obj_rf, "ppv", "tpr")
+plot(precision_recall_rf, main = "Precisoin Recall curve")
+abline(a=0, b= 1, lty = 3)
+
+# Computing the area under the curve
+auc = performance(pred_obj_rf,"auc"); 
+auc = as.numeric(auc@y.values)
+auc
+
+# Computing Gini
+gini = ineq(rf_predict_test_prob[,2], type="Gini")
+gini
+
+```
+# Observation :
+## the area under the curve : 99.88%
+## Gini : 90.62%
+
+## Gain & Lift Chart:
+```{r}
+lift_rf <- lift(d_test$personal_loan ~ rf_predict_test_prob[,2], data = d_test, class ="Yes")
+ggplot(lift_rf, plot = "lift")+ ggtitle("Lift Chart")
+ggplot(lift_rf, plot = "gain") + ggtitle("Gain Chart")
+```
+## KS table & KS plot:
+```{r}
+ks_stat(d_test$personal_loan, rf_predict_test_prob[,2]) # print KS
+
+ks_stat(d_test$personal_loan, rf_predict_test_prob[,2], returnKSTable = T) # print table KS
+
+ks_plot(d_test$personal_loan, rf_predict_test_prob[,2]) # plot KS
+```
+# Observation :
+## Kolomogorov-Smirnov :KS : 96.43%.
+## 10% of data give us 100% respond.
+
+## model validation:
+```{r}
+RF_CM_train = table(d_test$personal_loan,rf_predict_test_class)
+rf_ac<-(RF_CM_train[1,1]+RF_CM_train[2,2])/nrow(d_test)
+print('the Accuracy for Random forest :')
+print(rf_ac*100,digits = 4)
+
+Rpart_CM_train = table(d_test$personal_loan,rpart_predict_test_class)
+rpart_ac<-(Rpart_CM_train[1,1]+Rpart_CM_train[2,2])/nrow(d_test)
+print('the Accuracy for decision tree :')
+print(rpart_ac*100,digits = 4)
+```
+# Remarks :
+## the best Accuracy model is Random Forest wtich is 98.83.
+## not to bad for decision tree too,very close accuracy to random forest .
+## but for decision tree we used random sample of 70 columes the datset , definitely training model for 3255 columes will not be the same as 70 columes.
+## I highly recommend Random Forest model.
+
+
