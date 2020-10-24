@@ -17,3 +17,15 @@ Experience end-to-end problem solving using a combination of tools and technique
 7-Modelling Process (validation & interpretation) Model comparisons (confusion matrix, ROC, AUC, SSE whichever is applicable) Ensemble modelling, wherever applicable Interpretation from the best model
 
 8-Business insights
+
+### Domain
+
+we used Falcon airlines data to understand which parameters important to ‘satisfied’ passenger, after data process and good fit model that solves the problem by using a combination of tools and techniques in analytics with most appropriate for business, also portion of the population rate should be targeted to get the highest response rate, also classify satisfied customer with accuracy 96.31%
+
+### Skills and Tools
+
+R, Random Forest, Classification, Machine Learning, Exploratory Data Analysis
+
+### Conclusion
+
+after analytics and modeling the most important variables for satisfaction are: "entertainment" and "Seat_comfort", random forest had the best accurate 96.31% for classify satisfied customer also target the right portion population size for marketing campaigns and ads click to get the maximum response rate of 98%.
